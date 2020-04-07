@@ -39,14 +39,11 @@ const KEYBOARD = {
   properties: {
     value: "",
     caps: false,
-    englishLanguage:
-      JSON.parse(localStorage.getItem("englishLanguage")) === null
-        ? true
-        : JSON.parse(localStorage.getItem("englishLanguage")),
+    isEnglishLanguage: null,
   },
 
   init() {
-
+    this.setIsEnglishLanguageProperty();
     // create textarea
     this.elements.textarea = document.createElement("textarea");
     this.elements.textarea.classList.add("keyboard-textarea");
@@ -68,60 +65,84 @@ const KEYBOARD = {
     document.body.appendChild(this.elements.textarea);
     this.elements.main.appendChild(this.elements.keysContainer);
     document.body.appendChild(this.elements.main);
+
     document.addEventListener("keydown", this.onKeyPress.bind(this));
-    document.addEventListener("click", this.onKeyPress.bind(this));
     document.addEventListener("keyup", this.onKeyUpPress.bind(this));
+    document.addEventListener("mousedown", this.onKeyPress.bind(this));
+    document.addEventListener("mouseup", this.onKeyUpPress.bind(this));
+  },
+
+  setIsEnglishLanguageProperty() {
+    if (JSON.parse(localStorage.getItem("englishLanguage")) === null) {
+      this.properties.isEnglishLanguage = true;
+      localStorage.setItem(
+        "englishLanguage",
+        this.properties.isEnglishLanguage
+      );
+    } else {
+      this.properties.isEnglishLanguage = JSON.parse(
+        localStorage.getItem("englishLanguage")
+      );
+    }
   },
 
   // create keyboard keys
   createKeys() {
     const fragment = document.createDocumentFragment();
-    this.aKeys = this.properties.englishLanguage ? KEYS_EN : KEYS_RUS;
-    this.aKeys.forEach((key, index) => {
+    this.aLetters = this.properties.isEnglishLanguage ? KEYS_EN : KEYS_RUS;
+    this.aLetters.forEach((key, index) => {
       const keyElement = document.createElement("button");
-      const lineBreak =
-        ["Back", "\\", "Enter", "Win"].indexOf(key) !== -1;
+      const lineBreak = ["Back", "\\", "Enter", "Win"].indexOf(key) !== -1;
 
       // add keyboard key buttons
       keyElement.setAttribute("type", "button");
       keyElement.classList.add("keyboard-key");
 
       switch (key) {
-
         case "Caps":
           keyElement.classList.add("keyboard-key-caps");
           keyElement.innerHTML = "Caps";
           keyElement.dataset.Caps = true;
+          keyElement.dataset.LetterCode = KEY_CODE[index];
+          keyElement.dataset.Letter = "Caps";
           break;
 
         case "Enter":
           keyElement.classList.add("keyboard-key-double");
           keyElement.innerHTML = "Enter";
           keyElement.dataset.Enter = true;
+          keyElement.dataset.LetterCode = KEY_CODE[index];
+          keyElement.dataset.Letter = "Enter";
           break;
 
         case "Space":
           keyElement.classList.add("keyboard-key-space");
           keyElement.innerHTML = "Space";
           keyElement.dataset.Space = true;
+          keyElement.dataset.LetterCode = KEY_CODE[index];
+          keyElement.dataset.Letter = "Space";
           break;
 
         case "Tab":
           keyElement.innerHTML = "Tab";
           keyElement.dataset.Tab = true;
+          keyElement.dataset.LetterCode = KEY_CODE[index];
+          keyElement.dataset.Letter = "Tab";
           break;
 
         case "Shift":
           keyElement.classList.add("keyboard-key-double");
           keyElement.innerHTML = "Shift";
           keyElement.dataset.Shift = true;
+          keyElement.dataset.LetterCode = KEY_CODE[index];
+          keyElement.dataset.Letter = "Shift";
           break;
 
         default:
           keyElement.textContent = key;
           keyElement.innerHTML = key;
           keyElement.dataset.LetterCode = KEY_CODE[index];
-          keyElement.dataset.Letter = KEYS_EN[index];
+          keyElement.dataset.Letter = this.aLetters[index];
           break;
       }
       fragment.appendChild(keyElement);
@@ -133,11 +154,14 @@ const KEYBOARD = {
   },
 
   onKeyUpPress(e) {
-    let evtobj = window.event ? event : e;
-    evtobj.preventDefault();
-    let keyCode = evtobj.keyCode;
-    let currentVirtualKey = this.getCurrentVirtualKey(keyCode);
-    if (currentVirtualKey !== undefined) currentVirtualKey.classList.remove("active");
+    if (Object.keys(this.oCurrentLetter).length !== 0) {
+      let activeButtons = this.elements.keysContainer.querySelectorAll(
+        ".active"
+      );
+      activeButtons.forEach((button) => {
+        button.classList.remove("active");
+      });
+    }
   },
 
   // keypress check
@@ -145,110 +169,51 @@ const KEYBOARD = {
     let evtobj = window.event ? event : e;
     evtobj.preventDefault();
 
-    // ctrl + alt
-    if (evtobj.altKey && evtobj.shiftKey) {
-      this.properties.englishLanguage = !this.properties.englishLanguage;
+    this.oCurrentLetter = this.getKeyObject(evtobj);
+    if (Object.keys(this.oCurrentLetter).length !== 0) {
+      this.setActiveStyle();
+
+      if (this.checkIsSpecialButton(this.oCurrentLetter)) {
+        this.addMethodsToSpecialButtons(this.oCurrentLetter);
+        return;
+      }
+
+      this.addTextToTextArea();
     }
+  },
 
-    // caps
-    if (evtobj.keyCode == 20 || evtobj.target.dataset.Letter === "Caps") {
-      this.properties.caps = !this.properties.caps;
-      let aLetters = this.checkLettersArray();
-      this.changeLanguage(aLetters);
-      this.addTextToTextArea(e, evtobj.keyCode);
-      document.querySelector(".keyboard-key-caps").classList.toggle("caps-active");
-      return;
+  getKeyObject(evtobj) {
+    this.oCurrentLetter = {};
+    let oClickedVirtualKey = evtobj.target.dataset.LetterCode;
+    let oClickedFhysicsKey = evtobj.keyCode;
+
+  
+    if (oClickedFhysicsKey) {
+      if (!this.checkHasVirtualKeyForPhysic(oClickedFhysicsKey)) {
+        return this.oCurrentLetter;
+      }
+      this.oCurrentLetter.keyCode = oClickedFhysicsKey;
+      this.oCurrentLetter.Letter = this.getDOMVirtualKey(
+        oClickedFhysicsKey
+      ).dataset.Letter;
+      this.oCurrentLetter.DOMBtn = this.getDOMVirtualKey(oClickedFhysicsKey);
+      this.oCurrentLetter.AltShift = evtobj.altKey && evtobj.shiftKey;
+    } else if (oClickedVirtualKey) {
+      this.oCurrentLetter.keyCode = Number(oClickedVirtualKey);
+      this.oCurrentLetter.Letter = evtobj.target.dataset.Letter;
+      this.oCurrentLetter.DOMBtn = evtobj.target;
+      this.oCurrentLetter.AltShift = evtobj.altKey && evtobj.shiftKey;
     }
-
-    //backspace
-    if (evtobj.keyCode == 8 || evtobj.target.dataset.Letter === "Back") {
-      this.properties.value = this.properties.value.slice(
-        0,
-        this.properties.value.length - 1
-      );
-    }
-    let aLetters = this.checkLettersArray();
-    this.changeLanguage(aLetters);
-    this.addTextToTextArea(e, evtobj.keyCode);
+    oClickedVirtualKey = null;
+    oClickedFhysicsKey = null;
+    return this.oCurrentLetter;
   },
 
-  // change language
-  changeLanguage(aLetters) {
-    this.aKeys = document.querySelectorAll(".keyboard-key");
-    this.aLetters = aLetters;
-    this.aKeys.forEach((key, index) => {
-      key.innerText = this.aLetters[index];
-      key.dataset.LetterCode = KEY_CODE[index];
-      key.dataset.Letter = this.aLetters[index];
-    });
-    localStorage.setItem("englishLanguage", this.properties.englishLanguage);
+  checkHasVirtualKeyForPhysic(oClickedFhysicsKey) {
+    return KEY_CODE.indexOf(oClickedFhysicsKey) !== -1;
   },
 
-  // change language array
-  checkLettersArray() {
-    let isCaps = this.properties.caps;
-    let isEng = this.properties.englishLanguage;
-    if (isEng && isCaps) return KEYS_EN_CAPS;
-    if (isEng && !isCaps) return KEYS_EN;
-    if (!isEng && isCaps) return KEYS_RUS_CAPS;
-    if (!isEng && !isCaps) return KEYS_RUS;
-  },
-
-  // add text to textarea
-  addTextToTextArea(e, keyCode) {
-    let sLetter = this.checkKey(e, keyCode);
-    this.properties.value += sLetter;
-    this.elements.textarea.value = "";
-    this.elements.textarea.value = this.properties.value;
-  },
-
-  // check key
-  checkKey(e, keyCode) {
-    let sLetter = "";
-
-    // for virtual keyboard
-    if (e.target.dataset.Letter) {
-      sLetter = this.checkSpecialKey(e.target.dataset.Letter);
-    }
-
-    // for phisycal keyboard
-    if (this.aLetters[KEY_CODE.indexOf(keyCode)]) {
-      let key = this.aLetters[KEY_CODE.indexOf(keyCode)];
-      this.setFocus(keyCode);
-      sLetter = this.checkSpecialKey(key);
-    }
-    return sLetter;
-  },
-
-  checkSpecialKey(key) {
-    switch (key) {
-      case "Back":
-      case "Caps":
-      case "Shift":
-      case "Ctrl":
-      case "Alt":
-      case "Win":
-        key = "";
-        break;
-      case "Enter":
-        key = "\n";
-        break;
-      case "Space":
-        key = " ";
-        break;
-      case "Tab":
-        key = "   ";
-        break;
-    }
-    return key;
-  },
-
-  setFocus(keyCode) {
-    let currentVirtualKey = this.getCurrentVirtualKey(keyCode);
-    currentVirtualKey.classList.add("active");
-  },
-
-  getCurrentVirtualKey(keyCode) {
+  getDOMVirtualKey(keyCode) {
     let currentVirtualKey;
     this.elements.keys.forEach((item) => {
       if (item.dataset.LetterCode == keyCode) {
@@ -256,6 +221,101 @@ const KEYBOARD = {
       }
     });
     return currentVirtualKey;
+  },
+
+  checkIsSpecialButton(oCurrentLetter) {
+    let sLetter = oCurrentLetter.Letter;
+    let isSpecialBtn;
+    switch (sLetter) {
+      case "Back":
+      case "Caps":
+      case "Shift":
+      case "Ctrl":
+      case "Alt":
+      case "Win":
+      case "Enter":
+      case "Space":
+      case "Tab":
+        isSpecialBtn = true;
+        break;
+      default:
+        isSpecialBtn = false;
+        break;
+    }
+    return isSpecialBtn;
+  },
+
+  addMethodsToSpecialButtons(oCurrentLetter) {
+    let sLetter = oCurrentLetter.Letter;
+    if (sLetter === "Caps" || oCurrentLetter.AltShift) {
+      this.changeCapsOrLang();
+      this.setNewLettersArr();
+      this.updateVirtualKeys();
+      return;
+    }
+    if (sLetter === "Back") this.deleteTextAreaValue();
+    if (sLetter === "Enter") this.addEnterToTextAreaValue();
+    if (sLetter === "Space") this.addSpaceToTextAreaValue();
+    if (sLetter === "Tab") this.addTabToTextAreaValue();
+  },
+
+  changeCapsOrLang() {
+    let sLetter = this.oCurrentLetter.Letter;
+    if (sLetter === "Caps") {
+      this.properties.caps = !this.properties.caps;
+      this.oCurrentLetter.DOMBtn.classList.toggle("caps-active");
+    }
+    if (this.oCurrentLetter.AltShift) {
+      this.properties.isEnglishLanguage = !this.properties.isEnglishLanguage;
+      localStorage.setItem(
+        "englishLanguage",
+        this.properties.isEnglishLanguage
+      );
+    }
+  },
+
+  setNewLettersArr() {
+    let isCaps = this.properties.caps;
+    let isEng = this.properties.isEnglishLanguage;
+    if (isEng && isCaps) this.aLetters = KEYS_EN_CAPS;
+    if (isEng && !isCaps) this.aLetters = KEYS_EN;
+    if (!isEng && isCaps) this.aLetters = KEYS_RUS_CAPS;
+    if (!isEng && !isCaps) this.aLetters = KEYS_RUS;
+  },
+
+  updateVirtualKeys() {
+    this.aKeys = document.querySelectorAll(".keyboard-key");
+    this.aKeys.forEach((key, index) => {
+      key.innerText = this.aLetters[index];
+      key.dataset.LetterCode = KEY_CODE[index];
+      key.dataset.Letter = this.aLetters[index];
+    });
+  },
+
+  deleteTextAreaValue() {
+    let sTextAreaValue = this.elements.textarea.value;
+    this.elements.textarea.value = this.elements.textarea.value.slice(0, -1);
+  },
+
+  addTextToTextArea() {
+    this.elements.textarea.value += this.oCurrentLetter.Letter;
+  },
+
+  addEnterToTextAreaValue() {
+    this.elements.textarea.value += "\n";
+  },
+
+  addSpaceToTextAreaValue() {
+    this.elements.textarea.value += " ";
+  },
+
+  addTabToTextAreaValue() {
+    this.elements.textarea.value += "   ";
+  },
+
+  setActiveStyle() {
+    this.styledButton = this.oCurrentLetter.DOMBtn;
+    this.styledButton.classList.add("active");
   },
 };
 
