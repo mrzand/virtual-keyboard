@@ -46,13 +46,16 @@ const KEYBOARD = {
   },
 
   init() {
+
     // create textarea
     this.elements.textarea = document.createElement("textarea");
     this.elements.textarea.classList.add("keyboard-textarea");
     this.elements.textarea.autofocus = true;
+
     // create keyboard container
     this.elements.main = document.createElement("div");
     this.elements.main.classList.add("keyboard");
+
     // create keyboard keys
     this.elements.keysContainer = document.createElement("div");
     this.elements.keysContainer.classList.add("keyboard-keys");
@@ -60,6 +63,7 @@ const KEYBOARD = {
     this.elements.keys = this.elements.keysContainer.querySelectorAll(
       ".keyboard-key"
     );
+
     // append keyboards elements
     document.body.appendChild(this.elements.textarea);
     this.elements.main.appendChild(this.elements.keysContainer);
@@ -147,16 +151,17 @@ const KEYBOARD = {
     }
 
     // caps
-    if (evtobj.keyCode == 20 || e.target.dataset.Caps) {
+    if (evtobj.keyCode == 20 || evtobj.target.dataset.Letter === "Caps") {
       this.properties.caps = !this.properties.caps;
       let aLetters = this.checkLettersArray();
       this.changeLanguage(aLetters);
+      this.addTextToTextArea(e, evtobj.keyCode);
       document.querySelector(".keyboard-key-caps").classList.toggle("caps-active");
       return;
     }
 
     //backspace
-    if (evtobj.keyCode == 8 || e.target.dataset.Back) {
+    if (evtobj.keyCode == 8 || evtobj.target.dataset.Letter === "Back") {
       this.properties.value = this.properties.value.slice(
         0,
         this.properties.value.length - 1
@@ -200,10 +205,12 @@ const KEYBOARD = {
   // check key
   checkKey(e, keyCode) {
     let sLetter = "";
+
     // for virtual keyboard
     if (e.target.dataset.Letter) {
       sLetter = this.checkSpecialKey(e.target.dataset.Letter);
     }
+
     // for phisycal keyboard
     if (this.aLetters[KEY_CODE.indexOf(keyCode)]) {
       let key = this.aLetters[KEY_CODE.indexOf(keyCode)];
